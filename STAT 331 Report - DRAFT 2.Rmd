@@ -1,0 +1,43 @@
+---
+title: "STAT 331 PROJECT - DRAFT 2"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library("faraway")
+protein_train <- read.csv('protein-train.csv')
+
+
+mfull <- lm(accuracy~., data = protein_train)
+mfull$coefficients
+
+# remove the 2 variables which were perfectly correlated together and create a new dataframe
+protein = subset(protein_train, select = -c(scArgN_bbC_medshort,scArgN_bbO_short) )
+protein
+
+# new linear model based on the new dataframe
+mshort<- lm(accuracy ~., data=protein)
+summary(mshort)
+vif(mshort)
+
+# while loop to go through all the vifs, and only keep those variables with a vif < 10
+cutoff <- 10
+flag <- TRUE
+while(flag){
+  fit <- lm(accuracy ~ ., data=protein)
+  vfit <- vif(fit)
+  if(max(vfit) > cutoff){
+    protein <- subset(protein, select = -get(names(vfit)[which.max(vfit)]))
+  } else {
+    flag <- FALSE
+   }
+}
+
+print(fit)
+print(vfit)
+
+```

@@ -1,0 +1,89 @@
+---
+title: "STAT 331 PROJECT - DRAFT 3"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library("faraway")
+protein_train <- read.csv("protein-train.csv")
+
+# remove the 2 variables which were perfectly correlated together and create a new dataframe
+protein = subset(protein_train, select = -c(scArgN_bbC_medshort,scArgN_bbO_short) )
+protein
+
+# new linear model based on the new dataframe
+mshort<- lm(accuracy ~., data=protein)
+summary(mshort)
+vif(mshort)
+
+# while loop to go through all the vifs, and only keep those variables with a vif < 10
+cutoff <- 10
+flag <- TRUE
+while(flag){
+  fit <- lm(accuracy ~ ., data=protein)
+  vfit <- vif(fit)
+  if(max(vfit) > cutoff){
+    protein <- subset(protein, select = -get(names(vfit)[which.max(vfit)]))
+  } else {
+    flag <- FALSE
+   }
+}
+
+max(vfit)
+
+
+linear_model2 <- lm(accuracy ~., protein)
+summary(linear_model2)
+max(vif(linear_model2))
+
+
+
+#check for violations of regression model assumptions
+plot(linear_model2$fitted.values,linear_model2$residuals, xlab="Fitted values",
+ylab="Residuals", main="Residuals vs fitted values")
+plot(1:nrow(protein),linear_model2$residuals, xlab="Index",
+ylab="Residuals", main="Residuals vs index")
+qqnorm(linear_model2$residuals)
+qqline(linear_model2$residuals, col="blue", lwd=2)
+#no violations found 
+
+
+summary(linear_model2)$adj.r.squared
+AIC(linear_model2)
+BIC(linear_model2)
+
+# stepwise methods
+library(MASS)
+
+# Full model and empty model with just intercept
+full <- lm(accuracy ~ ., data = protein)
+empty <- lm(accuracy ~ 1, data = protein)
+
+# default stepAIC uses AIC criterion
+stepAIC(object = empty, scope = list(upper = full, lower = empty), direction = "forward")
+
+# Let's get stepAIC to use BIC by specifying the penalty k = log(n)
+# Forward
+stepAIC(object = empty, scope = list(upper = full, lower = empty), direction = "forward", k = log(nrow(protein)))
+m_f <- stepAIC(object = empty, scope = list(upper = full, lower = empty), direction = "forward", trace = 0, k = log(nrow(protein)))
+summary(m_f)
+
+# Backward
+stepAIC(object = full, scope = list(upper = full, lower = empty), direction = "backward", k = log(nrow(protein)))
+m_b <- stepAIC(object = full, scope = list(upper = full, lower = empty), direction = "backward", trace = 0, k = log(nrow(protein)))
+summary(m_b)
+
+# Forward-backward
+stepAIC(object = empty, scope = list(upper = full, lower = empty), direction = "both", k = log(nrow(protein)))
+m_h <- stepAIC(object = empty, scope = list(upper = full, lower = empty), direction = "both", trace = 0, k = log(nrow(protein)))
+summary(m_h)
+
+
+```

@@ -1,0 +1,289 @@
+---
+title: "STAT 331 FINAL PROJECT APPENDIX"
+output:
+  word_document: default
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+library("faraway")
+protein_train <- read.csv('protein-train.csv')
+
+##EDA
+
+# check for NAs
+na.list = sapply(protein_train, function(x){sum(is.na(x))})
+na.list[na.list>0]
+
+#summary of original dataset
+
+
+#summary(protein_train)
+
+# Scatter plots
+par ( mfrow = c(3 ,3))
+plot ( protein_train$angles , protein_train$accuracy , ylab ="Accuracy", xlab ="Angles")
+plot ( protein_train$carbonylC_aliph2HC_short , protein_train$accuracy , ylab ="Accuracy", xlab =" carbonylC_aliph2HC_short")
+plot ( protein_train$carbonylC_bbCA_medlong , protein_train$accuracy , ylab ="Accuracy", xlab =" carbonylC_bbCA_medlong")
+plot ( protein_train$scAGN_bbC_medshort , protein_train$accuracy , ylab ="Accuracy", xlab =" scAGN_bbC_medshort")
+plot ( protein_train$scArgN_carboxylO_long , protein_train$accuracy , ylab ="Accuracy", xlab =" scArgN_carboxylO_long")
+plot ( protein_train$bbC_bbO_vlong , protein_train$accuracy , ylab ="Accuracy", xlab =" bbC_bbO_vlong")
+plot ( protein_train$aliph2HC_aliph3HC_vshort , protein_train$accuracy , ylab ="Accuracy", xlab =" aliph2HC_aliph3HC_vshort")
+
+
+
+mfull <- lm(accuracy~., data = protein_train)
+
+
+summary(mfull)
+
+# remove the 2 variables which were perfectly correlated together and create a new dataframe
+protein = subset(protein_train, select = -c(scArgN_bbC_medshort,scArgN_bbO_short) )
+
+# correlation with accuracy
+
+cor.list = sapply(protein[-1], function(x){cor(protein$accuracy,x)})
+
+cor.tab  = data.frame(var = names(cor.list), r=cor.list,row.names = NULL)
+
+cor.tab2 = subset(cor.tab, abs(r)>0.05)
+
+vars = cor.tab2$var
+
+vars = as.character(vars)
+protein1 = protein[ c("accuracy",as.character(vars))]
+
+# new linear model based on the new dataframe
+mshort<- lm(accuracy ~., data=protein1)
+summary(mshort)
+max(vif(mshort))
+
+# while loop to go through all the vifs, and only keep those variables with a vif < 10
+cutoff <- 10
+flag <- TRUE
+while(flag){
+  fit <- lm(accuracy ~ ., data=protein1)
+  vfit <- vif(fit)
+  if(max(vfit) > cutoff){
+    protein1 <- subset(protein1, select = -get(names(vfit)[which.max(vfit)]))
+  } else {
+    flag <- FALSE
+   }
+}
+
+#print(fit)
+#print(vfit)
+
+
+##MODEL SELECTION 
+set.seed(20680907)
+library(MASS)
+
+#start with one train/validation split
+N <- nrow(protein1)
+trainInd <- sample(1:N, round(N*0.8), replace=F)
+trainSet <- protein1[trainInd,]
+validSet <- protein1[-trainInd,]
+
+# Full model and empty model with just intercept
+full <- lm(accuracy ~ ., data = trainSet)
+empty <- lm(accuracy ~ 1, data =trainSet)
+
+# Stepwise forward with BIC
+#m1<-stepAIC(object = empty, scope = list(upper = full, lower = empty), direction = "forward", k = log(nrow(trainSet)))
+
+#save(m1, file= "m1.rda")
+load("m1.rda")
+summary(m1)
+BIC(m1)
+
+pred1 <- predict(m1, newdata = validSet)
+sqrt(mean((validSet$accuracy - pred1)^2)) # RMSE on validation
+sqrt(mean(m1$residuals^2)) # RMSE on train
+
+# forward stepwise again, with a larger L0 penalty (e.g., twice the usual BIC penalty)
+#m2 <- stepAIC(object = empty, scope = list(upper = full, lower = empty), direction = "forward", k = 2*log(nrow(trainSet)))
+
+#save(m2, file= "m2.rda")
+load("m2.rda")
+summary(m2)
+BIC(m2)
+
+pred2 <- predict(m2, newdata = validSet)
+sqrt(mean((validSet$accuracy - pred2)^2)) # RMSE on validation
+sqrt(mean(m2$residuals^2)) # RMSE on train
+
+#Forward-Backward
+#m3 <- stepAIC(object = empty, scope = list(upper = full, lower = empty), direction = "both", k = log(nrow(trainSet)))
+
+#save(m3, file= "m3.rda")
+load("m3.rda")
+summary(m3)
+BIC(m3)
+
+pred3 <- predict(m3, newdata = validSet)
+sqrt(mean((validSet$accuracy - pred3)^2)) # RMSE on validation
+sqrt(mean(m3$residuals^2)) # RMSE on train
+
+
+#Forward-Backward with larger penalty 
+#m4 <- stepAIC(object = empty, scope = list(upper = full, lower = empty), direction = "both", k = 2*log(nrow(trainSet)))
+
+#save(m4, file= "m4.rda")
+load("m4.rda")
+summary(m4)
+BIC(m4)
+
+pred4 <- predict(m4, newdata = validSet)
+sqrt(mean((validSet$accuracy - pred4)^2)) # RMSE on validation
+sqrt(mean(m4$residuals^2)) # RMSE on train
+
+
+#Plots of Models to Check Model Assumptions 
+
+#m1
+par(mfrow=c(1,3))
+plot(m1$fitted.values,m1$residuals, xlab="Fitted values",
+ylab="Residuals", main="Residuals vs Fitted values")
+plot(1:nrow(trainSet),m1$residuals, xlab="Index",
+ylab="Residuals", main="Residuals vs Index")
+qqnorm(m1$residuals)
+qqline(m1$residuals, col="blue", lwd=2)
+
+
+#m2
+plot(m2$fitted.values,m2$residuals, xlab="Fitted values",
+ylab="Residuals", main="Residuals vs fitted values")
+plot(1:nrow(trainSet),m2$residuals, xlab="Index",
+ylab="Residuals", main="Residuals vs index")
+qqnorm(m2$residuals)
+qqline(m2$residuals, col="blue", lwd=2)
+hist ( m2$residuals )
+
+#m3
+par(mfrow=c(1,3))
+plot(m3$fitted.values,m3$residuals, xlab="Fitted values",
+ylab="Residuals", main="Residuals vs Fitted values")
+plot(1:nrow(trainSet),m3$residuals, xlab="Index",
+ylab="Residuals", main="Residuals vs Index")
+qqnorm(m3$residuals)
+qqline(m3$residuals, col="blue", lwd=2)
+
+
+#m4
+plot(m4$fitted.values,m4$residuals, xlab="Fitted values",
+ylab="Residuals", main="Residuals vs fitted values")
+plot(1:nrow(trainSet),m4$residuals, xlab="Index",
+ylab="Residuals", main="Residuals vs index")
+qqnorm(m4$residuals)
+qqline(m4$residuals, col="blue", lwd=2)
+hist ( m4$residuals )
+
+# K fold cross validation to choose model selection method
+K <- 5
+validSetSplits <- sample((1:N)%%K + 1)
+RMSE1 <- c()
+RMSE2 <- c()
+RMSE3 <- c()
+RMSE4 <-c()
+for (k in 1:K) {
+  validSet <- protein1[validSetSplits==k,]
+  trainSet <- protein1[validSetSplits!=k,]  
+  
+  full <- lm(accuracy ~ ., data = trainSet)
+  empty <- lm(accuracy ~ 1, data = trainSet)
+  
+  load("m1.rda")
+  pred1 <- predict(m1, newdata = validSet)
+  RMSE1[k] <- sqrt(mean((validSet$accuracy - pred1)^2))  
+  
+  load("m2.rda")
+  pred2 <- predict(m2, newdata = validSet)
+  RMSE2[k] <- sqrt(mean((validSet$accuracy - pred2)^2))  
+  
+  load("m3.rda")
+  pred3 <- predict(m3, newdata = validSet)
+  RMSE3[k] <- sqrt(mean((validSet$accuracy - pred3)^2))  
+  
+  load("m4.rda")
+  pred4 <- predict(m4, newdata = validSet)
+  RMSE4[k] <- sqrt(mean((validSet$accuracy - pred4)^2))  
+
+}
+
+
+RMSE1
+RMSE2
+RMSE3
+RMSE4
+mean(RMSE1)
+mean(RMSE2)
+mean(RMSE3)
+mean(RMSE4)
+
+
+# turns out m1 is indeed the better procedure among these 4 based on CV prediction error
+# if we decide on procedure m1, we can apply procedure m1 to all observations
+# to get a final model for future predictions
+# e.g.,
+full <- lm(accuracy ~ ., data = protein1)
+empty <- lm(accuracy ~ 1, data = protein1)
+
+#mfinal <- stepAIC(object = empty, scope = list(upper = full, lower = empty), direction = "forward", k = log(nrow(trainSet)))
+
+
+#save(mfinal, file= "mfinal.rda")
+load("mfinal.rda")
+
+summary(mfinal)
+
+
+#Model Assumption Check on mfinal 
+par(mfrow=c(2,2))
+plot(mfinal$fitted.values,mfinal$residuals, xlab="Fitted values",
+ylab="Residuals", main="Residuals vs fitted values")
+plot(1:nrow(protein1),mfinal$residuals, xlab="Index",
+ylab="Residuals", main="Residuals vs index")
+qqnorm(mfinal$residuals)
+qqline(mfinal$residuals, col="blue", lwd=2)
+hist ( mfinal$residuals)
+
+
+#Box-Cox Transformation 
+colz <- names(mfinal$coefficients)
+colz <- colz[2:length(colz)]
+mfinal.ind <- match(colz, colnames(protein1))
+mfinal.ind <- append(1, mfinal.ind)
+
+bc <- boxcox(mfinal)
+lambda <- bc$x[which.max(bc$y)]
+mfinal1 <- lm( (accuracy^lambda - 1)/lambda ~., data=protein1[,mfinal.ind])
+
+#Model Assumption Check on mfinal1
+par(mfrow=c(2,2))
+plot(mfinal1$fitted.values,mfinal1$residuals, xlab="Fitted values",
+ylab="Residuals", main="Residuals vs fitted values")
+plot(1:nrow(protein1),mfinal1$residuals, xlab="Index",
+ylab="Residuals", main="Residuals vs index")
+qqnorm(mfinal1$residuals)
+qqline(mfinal1$residuals, col="blue", lwd=2)
+hist ( mfinal1$residuals)
+
+summary(mfinal1)
+
+#Prediction of mfinal
+protein_test <- read.csv('protein-test.csv')
+
+pred <- predict(mfinal1, data=protein_test)
+writeLines(as.character(pred), "mypreds.txt")
+
+
+
+```

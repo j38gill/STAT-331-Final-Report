@@ -1,0 +1,78 @@
+---
+title: "STAT 331 Final Project"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+protein_train <- read.csv('protein-train.csv')
+
+library(car)
+library(faraway)
+mfull <- lm(accuracy~., data = protein_train)
+mfull$coefficients
+
+# remove the 2 variables which were perfectly correlated together and create a new dataframe
+protein = subset(protein_train, select = -c(scArgN_bbC_medshort,scArgN_bbO_short) )
+protein
+
+# new linear model based on the new dataframe
+mshort<- lm(accuracy ~., data=protein)
+summary(mshort)
+vif(mshort)
+
+# while loop to go through all the vifs, and only keep those variables with a vif < 10
+cutoff <- 10
+flag <- TRUE
+while(flag){
+  fit <- lm(accuracy ~ ., data=protein)
+  vfit <- vif(fit)
+  if(max(vfit) > cutoff){
+    protein <- protein[, -which.max(vfit)]
+  } else {
+    flag <- FALSE
+  }
+}
+
+print(fit)
+print(vfit)
+
+# Removed close to 460+ variables. didnt work entirely. For some reason it removed our explanatory variable: accuracy. 
+# I have added it again to the dataset
+protein2 <- cbind(protein_train$accuracy , protein)
+names(protein2)[names(protein2) == "protein_train$accuracy"] <- "accuracy"
+linear_model2 <- lm(accuracy ~., protein2)
+summary(linear_model2)
+vif(linear_model2)
+
+# Now i have manually removed the remaining variables with vif > 10. 
+linear_model3 <- lm(accuracy ~.- scArgN_bbC_medlong - bbCA_bbC_medlong - bbN_bbO_short- sulfur_bbC_medshort - bbC_bbC_medlong -
+                      bbCA_bbCA_medlong - bbC_bbO_medshort - bbN_bbC_medlong - bbCA_bbO_medlong - bbProN_bbCA_medlong -
+                      hydroxylO_bbC_medlong - bbN_bbCA_long - sulfur_bbCA_medlong - scArgN_bbO_medshort - carboxylO_bbCA_short -
+                      scArgN_bbO_vlong - bbN_bbC_short, protein2)
+summary(linear_model3)
+vif(linear_model3)
+max(vif(linear_model3))
+which.max(vif(linear_model3))
+
+# this is our final dataset after removing close to 295 variables with vif > 10. The max vif now is < 10.
+final_dataset <- subset(protein2, select = -c(scArgN_bbC_medlong, bbCA_bbC_medlong, bbN_bbO_short, sulfur_bbC_medshort, bbC_bbC_medlong,
+                                                bbCA_bbCA_medlong, bbC_bbO_medshort, bbN_bbC_medlong, bbCA_bbO_medlong, bbProN_bbCA_medlong,
+                                                hydroxylO_bbC_medlong, bbN_bbCA_long, sulfur_bbCA_medlong, scArgN_bbO_medshort, carboxylO_bbCA_short,
+                                                scArgN_bbO_vlong, bbN_bbC_short) )
+
+#EDA
+# Graph is hevaily concentrated for angle values between 115 and 135, and for accuracy values between 5 and 10. Few outliers
+plot(protein_train$angles, protein_train$accuracy)
+# Correlation of 0.22
+cor.test(protein_train$angles, protein_train$accuracy)
+
+# Mean values are lower than 3 for most of the variables. They are higher towards the last few variables. This does not signify any sort of trend
+# however.
+summary(final_dataset)
+
+```

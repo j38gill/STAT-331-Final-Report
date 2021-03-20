@@ -1,0 +1,75 @@
+---
+title: "draft 4 fml"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+##eda 
+library("faraway")
+protein_train <- read.csv("protein-train.csv")
+
+# check for NAs
+na.list = sapply(protein_train, function(x){sum(is.na(x))})
+na.list[na.list>0]
+
+# correlation with accuracy
+
+cor.list = sapply(protein_train[-1], function(x){cor(protein_train$accuracy,x)})
+
+cor.tab  = data.frame(var = names(cor.list), r=cor.list,row.names = NULL)
+
+cor.tab2 = subset(cor.tab, abs(r)>0.35)
+
+vars = cor.tab2$var
+vars = as.character(vars)
+protein = protein_train[ c("accuracy",as.character(vars))]
+#print(protein)
+
+# summary statistics
+summary(protein)
+
+
+
+counts = protein%>% dplyr::count(carbonylC_aliph1HC_medlong)
+
+prot.model = lm(accuracy~., data = protein)
+summary(prot.model)
+
+
+    
+library(ggplot2)
+library(gridExtra)
+
+counts = list()
+hplots = list()
+
+for(i in 1:20){
+  
+  counts[[i]] = protein %>% dplyr::count(get(vars[i]))
+  colnames(counts[[i]]) = c(vars[i],"n")
+  p      = ggplot2::ggplot(data = counts[[i]], aes_string(vars[i])) + 
+                    ggplot2::geom_bar(aes(weight = n)) +  
+                    labs(title= vars[i],y="", x = "") + 
+    theme(title = element_text(size = 9), plot.margin=unit(c(0,-0.5,0,-0.5),"cm"))
+                         
+  
+  hplots[[i]] = p
+  }
+
+
+# arrange the plots in a grid
+do.call("grid.arrange", c(hplots, ncol=5, nrow = 4))
+
+prot.model = lm(accuracy~., data = protein)
+summary(prot.model)
+vif(prot.model)
+
+
+
+```
